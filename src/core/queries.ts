@@ -173,18 +173,53 @@ function applyTypeFilter(items: FlatItem[], type: ItemType | ItemType[]): FlatIt
   return items.filter((i) => types.includes(i.type))
 }
 
+function resolveEpicId(items: FlatItem[], query: string): string | null {
+  const epics = items.filter((i) => i.type === 'epic')
+  const exactMatch = epics.find((e) => e.id === query)
+  if (exactMatch) return exactMatch.id
+  const queryLower = query.toLowerCase()
+  const fuzzyMatch = epics.find((e) => e.content.toLowerCase().includes(queryLower))
+  return fuzzyMatch?.id ?? null
+}
+
+function resolveTaskId(items: FlatItem[], query: string): string | null {
+  const tasks = items.filter((i) => i.type === 'task')
+  const exactMatch = tasks.find((t) => t.id === query)
+  if (exactMatch) return exactMatch.id
+  const queryLower = query.toLowerCase()
+  const fuzzyMatch = tasks.find((t) => t.content.toLowerCase().includes(queryLower))
+  return fuzzyMatch?.id ?? null
+}
+
+function applyEpicFilter(allItems: FlatItem[], items: FlatItem[], epicQuery: string): FlatItem[] {
+  const resolvedEpicId = resolveEpicId(allItems, epicQuery)
+  if (!resolvedEpicId) return []
+  return items.filter((i) => i.epicId === resolvedEpicId || i.id === resolvedEpicId)
+}
+
+function applyTaskFilter(allItems: FlatItem[], items: FlatItem[], taskQuery: string): FlatItem[] {
+  const resolvedTaskId = resolveTaskId(allItems, taskQuery)
+  if (!resolvedTaskId) return []
+  return items.filter((i) => i.taskId === resolvedTaskId || i.id === resolvedTaskId)
+}
+
+function applySearchFilter(items: FlatItem[], search: string): FlatItem[] {
+  const searchLower = search.toLowerCase()
+  return items.filter((i) => i.content.toLowerCase().includes(searchLower))
+}
+
 export function filterItems(args: FilterArgs): FlatItem[] {
-  let items = flattenState(args.state)
+  const allItems = flattenState(args.state)
+  let items = allItems
+
+  // Resolve parent IDs before applying type filter (needs access to all items)
+  if (args.epicId !== undefined) items = applyEpicFilter(allItems, items, args.epicId)
+  if (args.taskId !== undefined) items = applyTaskFilter(allItems, items, args.taskId)
 
   if (args.status !== undefined) items = applyStatusFilter(items, args.status)
   if (args.priority !== undefined) items = applyPriorityFilter(items, args.priority)
   if (args.type !== undefined) items = applyTypeFilter(items, args.type)
-  if (args.epicId !== undefined) items = items.filter((i) => i.epicId === args.epicId || i.id === args.epicId)
-  if (args.taskId !== undefined) items = items.filter((i) => i.taskId === args.taskId || i.id === args.taskId)
-  if (args.search !== undefined) {
-    const searchLower = args.search.toLowerCase()
-    items = items.filter((i) => i.content.toLowerCase().includes(searchLower))
-  }
+  if (args.search !== undefined) items = applySearchFilter(items, args.search)
 
   return items
 }
