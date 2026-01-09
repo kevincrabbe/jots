@@ -8,6 +8,7 @@ import {
   updateTask,
   updateSubtask,
   markComplete,
+  removeItem,
 } from '../src/core/operations.js'
 import type { State } from '../src/core/schema.js'
 
@@ -188,5 +189,75 @@ describe('markComplete', () => {
     expect(task?.status).toBe('completed')
     // Epic should also be completed (all tasks done)
     expect(completeResult.data.epics[0]?.status).toBe('completed')
+  })
+})
+
+describe('removeItem', () => {
+  it('removes an epic', () => {
+    const state = createEmptyState()
+    const epicResult = addEpic({ state, input: { content: 'Epic to remove', priority: 2 } })
+    if (!epicResult.success) throw new Error('Expected success')
+
+    const result = removeItem({ state: epicResult.data.state, id: epicResult.data.epic.id })
+
+    expect(result.success).toBe(true)
+    if (!result.success) throw new Error('Expected success')
+    expect(result.data.epics).toHaveLength(0)
+  })
+
+  it('removes a task and keeps epic', () => {
+    let state = createEmptyState()
+    const epicResult = addEpic({ state, input: { content: 'Epic with task', priority: 2 } })
+    if (!epicResult.success) throw new Error('Expected success')
+    state = epicResult.data.state
+
+    const taskResult = addTask({
+      state,
+      input: { content: 'Task to remove', priority: 2, epicId: epicResult.data.epic.id },
+    })
+    if (!taskResult.success) throw new Error('Expected success')
+    state = taskResult.data.state
+
+    const result = removeItem({ state, id: taskResult.data.task.id })
+
+    expect(result.success).toBe(true)
+    if (!result.success) throw new Error('Expected success')
+    expect(result.data.epics).toHaveLength(1)
+    expect(result.data.epics[0]?.tasks).toHaveLength(0)
+  })
+
+  it('removes a subtask and keeps task', () => {
+    let state = createEmptyState()
+    const epicResult = addEpic({ state, input: { content: 'Epic hierarchy', priority: 2 } })
+    if (!epicResult.success) throw new Error('Expected success')
+    state = epicResult.data.state
+    const epicId = epicResult.data.epic.id
+
+    const taskResult = addTask({ state, input: { content: 'Task with sub', priority: 2, epicId } })
+    if (!taskResult.success) throw new Error('Expected success')
+    state = taskResult.data.state
+    const taskId = taskResult.data.task.id
+
+    const subtaskResult = addSubtask({
+      state,
+      input: { content: 'Subtask to remove', priority: 2, epicId, taskId },
+    })
+    if (!subtaskResult.success) throw new Error('Expected success')
+    state = subtaskResult.data.state
+
+    const result = removeItem({ state, id: subtaskResult.data.subtask.id })
+
+    expect(result.success).toBe(true)
+    if (!result.success) throw new Error('Expected success')
+    expect(result.data.epics[0]?.tasks[0]?.subtasks).toHaveLength(0)
+  })
+
+  it('fails for nonexistent id', () => {
+    const state = createEmptyState()
+    const result = removeItem({ state, id: 'nonexistent' })
+
+    expect(result.success).toBe(false)
+    if (result.success) throw new Error('Expected failure')
+    expect(result.error).toContain('Item not found')
   })
 })
