@@ -11,7 +11,7 @@ Jots provides a simple CLI and library for managing work in a three-level hierar
 ## Installation
 
 ```bash
-npm install -g jots
+npm install -g jots-ai
 ```
 
 ## Quick Start
