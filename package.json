@@ -40,8 +40,16 @@
     "claude",
     "agent"
   ],
-  "author": "",
+  "author": "Kevin Crabbe",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kevincrabbe/jots.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kevincrabbe/jots/issues"
+  },
+  "homepage": "https://github.com/kevincrabbe/jots#readme",
   "engines": {
     "node": ">=18"
   },

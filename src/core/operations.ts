@@ -289,6 +289,84 @@ function maybeCompleteTaskAndEpic(state: State, epicId: string, taskId: string):
 }
 
 // ============================================================================
+// Remove Operations
+// ============================================================================
+
+export type RemoveItemArgs = { state: State; id: string }
+
+export function removeItem(args: RemoveItemArgs): OperationResult<State> {
+  const { state, id } = args
+
+  for (let i = 0; i < state.epics.length; i++) {
+    const epic = state.epics[i]!
+    if (epic.id === id) return removeEpic(state, i)
+
+    const taskResult = findAndRemoveTask(state, epic, i, id)
+    if (taskResult) return taskResult
+  }
+
+  return { success: false, error: `Item not found: ${id}` }
+}
+
+function removeEpic(state: State, epicIndex: number): OperationResult<State> {
+  const newEpics = [...state.epics]
+  newEpics.splice(epicIndex, 1)
+  return { success: true, data: { ...state, epics: newEpics } }
+}
+
+function findAndRemoveTask(
+  state: State,
+  epic: Epic,
+  epicIndex: number,
+  id: string
+): OperationResult<State> | null {
+  for (let i = 0; i < epic.tasks.length; i++) {
+    const task = epic.tasks[i]!
+    if (task.id === id) return removeTask(state, epicIndex, epic, i)
+
+    const subtaskResult = findAndRemoveSubtask(state, epicIndex, epic, i, task, id)
+    if (subtaskResult) return subtaskResult
+  }
+  return null
+}
+
+function removeTask(state: State, epicIndex: number, epic: Epic, taskIndex: number): OperationResult<State> {
+  const newTasks = [...epic.tasks]
+  newTasks.splice(taskIndex, 1)
+  const updatedEpic = { ...epic, tasks: newTasks, updated_at: timestamp() }
+  return { success: true, data: updateEpicInState(state, epicIndex, updatedEpic) }
+}
+
+function findAndRemoveSubtask(
+  state: State,
+  epicIndex: number,
+  epic: Epic,
+  taskIndex: number,
+  task: Task,
+  id: string
+): OperationResult<State> | null {
+  const subtaskIndex = task.subtasks.findIndex((s) => s.id === id)
+  if (subtaskIndex === -1) return null
+  return removeSubtask(state, epicIndex, epic, taskIndex, task, subtaskIndex)
+}
+
+function removeSubtask(
+  state: State,
+  epicIndex: number,
+  epic: Epic,
+  taskIndex: number,
+  task: Task,
+  subtaskIndex: number
+): OperationResult<State> {
+  const now = timestamp()
+  const newSubtasks = [...task.subtasks]
+  newSubtasks.splice(subtaskIndex, 1)
+  const updatedTask = { ...task, subtasks: newSubtasks, updated_at: now }
+  const updatedEpic = updateTaskInEpic(epic, taskIndex, updatedTask, now)
+  return { success: true, data: updateEpicInState(state, epicIndex, updatedEpic) }
+}
+
+// ============================================================================
 // Create empty state
 // ============================================================================
 

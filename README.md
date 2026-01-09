@@ -46,6 +46,7 @@ jots done <id>
 | `jots next` | Get highest-priority actionable item |
 | `jots context` | Get full state summary (for AI agents) |
 | `jots done <id>` | Mark item as completed |
+| `jots remove <id>` | Remove item (and its children) |
 | `jots update <id>` | Modify content, priority, or status |
 | `jots validate` | Check for schema and consistency issues |
 

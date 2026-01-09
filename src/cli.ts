@@ -12,6 +12,7 @@ const main = defineCommand({
     next: () => import('./commands/next.js').then((m) => m.default),
     context: () => import('./commands/context.js').then((m) => m.default),
     done: () => import('./commands/done.js').then((m) => m.default),
+    remove: () => import('./commands/remove.js').then((m) => m.default),
     update: () => import('./commands/update.js').then((m) => m.default),
     validate: () => import('./commands/validate.js').then((m) => m.default),
     init: () => import('./commands/init.js').then((m) => m.default),

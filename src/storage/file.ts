@@ -43,7 +43,7 @@ export async function readState(path?: string): Promise<ReadResult> {
   if (!existsSync(resolvedPath)) {
     return {
       success: false,
-      error: `File not found: ${resolvedPath}`,
+      error: `No jots.json found. Run 'jots init' to create one.`,
       path: resolvedPath,
     }
   }
@@ -109,7 +109,7 @@ export async function readOrCreateState(path?: string): Promise<ReadResult> {
   }
 
   // If file not found, create it
-  if (result.error.includes('File not found')) {
+  if (result.error.includes('No jots.json found')) {
     const initResult = await initState(path)
     if (!initResult.success) {
       return { success: false, error: initResult.error, path: result.path }

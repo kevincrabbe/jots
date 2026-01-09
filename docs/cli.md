@@ -325,6 +325,50 @@ Use exact ID to specify which item.
 
 ---
 
+## jots remove
+
+Remove an item and all its children.
+
+```bash
+jots remove <identifier>
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `identifier` | Item ID or text to match |
+
+### Behavior
+
+- Accepts exact ID or fuzzy text match
+- Removes the item and all nested children
+- Removing an epic deletes all its tasks and subtasks
+- Removing a task deletes all its subtasks
+- Errors if multiple items match (use exact ID)
+
+### Examples
+
+```bash
+# By exact ID
+jots remove abc123
+
+# By partial ID
+jots remove abc
+
+# By text match
+jots remove "old feature"
+
+# Remove epic with all children
+jots remove "deprecated auth"
+```
+
+### Warning
+
+This action is permanent. The item and all its children will be deleted from jots.json.
+
+---
+
 ## jots update
 
 Modify an existing item.

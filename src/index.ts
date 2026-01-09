@@ -26,6 +26,7 @@ export {
   updateTask,
   updateSubtask,
   markComplete,
+  removeItem,
   createEmptyState,
 } from './core/operations.js'
 
