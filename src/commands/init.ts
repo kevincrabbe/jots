@@ -6,26 +6,30 @@ import { initState } from '../storage/file.js'
 const CLAUDE_MD_SECTION = `<!-- jots:start -->
 ## Task Management (Jots)
 
-This project uses **jots** for task management. Key rules:
+This project uses **jots** for task management.
 
-### Reading Tasks
-- Use \`jots list\` to see current tasks
-- Use \`jots next\` to get the highest-priority actionable item
-- Use \`jots context\` for a full state summary
+### Commands
+| Command | Description |
+|---------|-------------|
+| \`jots next\` | Get highest-priority actionable item |
+| \`jots context\` | Full state summary (progress, in-progress, blocked) |
+| \`jots list [type]\` | List items (epics, tasks, subtasks, all) |
+| \`jots done <id>\` | Mark item as completed |
+| \`jots update <id> -s in_progress\` | Mark item as in-progress |
+| \`jots add epic "Description"\` | Add a new epic |
+| \`jots add task "Desc" -e <epic>\` | Add task to epic |
+| \`jots add subtask "Desc" -e <epic> -t <task>\` | Add subtask |
 
-### Updating Tasks
-- Use \`jots update <id> --status in_progress\` when starting work
-- Use \`jots done <id>\` when completing work
-- Parent items auto-complete when all children are done
+### Key Features
+- **Fuzzy matching**: Use partial names instead of IDs (e.g., \`jots done "auth"\` matches "Implement auth")
+- **JSON output**: Add \`--json\` to any command for structured output
+- **Filtering**: \`jots list tasks -e <epic>\` to filter by parent
 
-### Priority Rules
-- Work on highest priority items first (P1 > P2 > P3 > P4 > P5)
-- Complete tasks within an epic before starting new epics
-
-### Adding Items
-- \`jots add epic "Description"\` - Add a new epic
-- \`jots add task "Description" --epic <id>\` - Add task to epic
-- \`jots add subtask "Description" --epic <id> --task <id>\` - Add subtask
+### Workflow
+1. Run \`jots next\` to see what to work on
+2. Run \`jots update <id> -s in_progress\` when starting
+3. Run \`jots done <id>\` when complete
+4. Work highest priority first (P1 > P2 > P3 > P4 > P5)
 <!-- jots:end -->`
 
 const HOOK_SCRIPT = `#!/bin/bash
