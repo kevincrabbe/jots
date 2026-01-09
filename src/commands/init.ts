@@ -14,19 +14,24 @@ This project uses **jots** for task management.
 | \`jots next\` | Get highest-priority actionable item |
 | \`jots context\` | Full state summary (progress, in-progress, blocked) |
 | \`jots list [type]\` | List items (epics, tasks, subtasks, all) |
+| \`jots list all --deps\` | List all items with dependencies shown |
 | \`jots done <id>\` | Mark item as completed |
 | \`jots update <id> -s in_progress\` | Mark item as in-progress |
+| \`jots update <id> --add-dep <dep>\` | Add a dependency |
+| \`jots update <id> --remove-dep <dep>\` | Remove a dependency |
 | \`jots add epic "Description"\` | Add a new epic |
 | \`jots add task "Desc" -e <epic>\` | Add task to epic |
 | \`jots add subtask "Desc" -e <epic> -t <task>\` | Add subtask |
+| \`jots add task "Desc" -e <epic> -d "other task"\` | Add task with dependency |
 
 ### Key Features
 - **Fuzzy matching**: Use partial names instead of IDs (e.g., \`jots done "auth"\` matches "Implement auth")
 - **JSON output**: Add \`--json\` to any command for structured output
 - **Filtering**: \`jots list tasks -e <epic>\` to filter by parent
+- **Dependencies**: Items can depend on other items at the same level (subtasks within same task, tasks within same epic, epics globally). Items with incomplete deps are blocked from \`jots next\`.
 
 ### Workflow
-1. Run \`jots next\` to see what to work on
+1. Run \`jots next\` to see what to work on (skips items with incomplete deps)
 2. Run \`jots update <id> -s in_progress\` when starting
 3. Run \`jots done <id>\` when complete
 4. Work highest priority first (P1 > P2 > P3 > P4 > P5)

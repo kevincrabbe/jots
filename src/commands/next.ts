@@ -9,7 +9,7 @@ function outputError(error: string, json: boolean): void {
   else console.error(`Error: ${error}`)
 }
 
-function printNextItem(item: FlatItem, queueDepth: number): void {
+function printNextItem(item: FlatItem, queueDepth: number, blockedByDeps: number): void {
   // eslint-disable-next-line no-console
   console.log(`Next ${item.type}:`)
   // eslint-disable-next-line no-console
@@ -24,8 +24,11 @@ function printNextItem(item: FlatItem, queueDepth: number): void {
     // eslint-disable-next-line no-console
     console.log(`  Task: ${item.taskContent}`)
   }
+  let queueLine = `\n(${queueDepth} items in queue`
+  if (blockedByDeps > 0) queueLine += `, ${blockedByDeps} blocked by deps`
+  queueLine += ')'
   // eslint-disable-next-line no-console
-  console.log(`\n(${queueDepth} items in queue)`)
+  console.log(queueLine)
 }
 
 export default defineCommand({
@@ -42,11 +45,11 @@ export default defineCommand({
     }
 
     const level = args.level as 'epic' | 'task' | 'subtask' | 'any'
-    const { item, queueDepth } = getNext({ state: result.state, level })
+    const { item, queueDepth, blockedByDeps } = getNext({ state: result.state, level })
 
     if (args.json) {
       // eslint-disable-next-line no-console
-      console.log(JSON.stringify({ item, queueDepth, hasMore: queueDepth > 1 }))
+      console.log(JSON.stringify({ item, queueDepth, blockedByDeps, hasMore: queueDepth > 1 }))
       return
     }
 
@@ -56,6 +59,6 @@ export default defineCommand({
       return
     }
 
-    printNextItem(item, queueDepth)
+    printNextItem(item, queueDepth, blockedByDeps)
   },
 })

@@ -192,6 +192,84 @@ describe('markComplete', () => {
   })
 })
 
+describe('deps in operations', () => {
+  it('adds epic with deps', () => {
+    let state = createEmptyState()
+    const e1 = addEpic({ state, input: { content: 'First epic content', priority: 2 } })
+    if (!e1.success) throw new Error('Expected success')
+    state = e1.data.state
+
+    const e2 = addEpic({ state, input: { content: 'Second epic content', priority: 2, deps: [e1.data.epic.id] } })
+    expect(e2.success).toBe(true)
+    if (!e2.success) throw new Error('Expected success')
+
+    expect(e2.data.epic.deps).toEqual([e1.data.epic.id])
+  })
+
+  it('adds task with deps within same epic', () => {
+    let state = createEmptyState()
+    const e = addEpic({ state, input: { content: 'Epic for tasks', priority: 2 } })
+    if (!e.success) throw new Error('Expected success')
+    state = e.data.state
+
+    const t1 = addTask({ state, input: { content: 'First task content', priority: 2, epicId: e.data.epic.id } })
+    if (!t1.success) throw new Error('Expected success')
+    state = t1.data.state
+
+    const t2 = addTask({
+      state,
+      input: { content: 'Second task content', priority: 2, epicId: e.data.epic.id, deps: [t1.data.task.id] },
+    })
+    expect(t2.success).toBe(true)
+    if (!t2.success) throw new Error('Expected success')
+
+    expect(t2.data.task.deps).toEqual([t1.data.task.id])
+  })
+
+  it('adds subtask with deps within same task', () => {
+    let state = createEmptyState()
+    const e = addEpic({ state, input: { content: 'Epic for subtasks', priority: 2 } })
+    if (!e.success) throw new Error('Expected success')
+    state = e.data.state
+    const epicId = e.data.epic.id
+
+    const t = addTask({ state, input: { content: 'Task for subtasks', priority: 2, epicId } })
+    if (!t.success) throw new Error('Expected success')
+    state = t.data.state
+    const taskId = t.data.task.id
+
+    const s1 = addSubtask({ state, input: { content: 'First subtask here', priority: 2, epicId, taskId } })
+    if (!s1.success) throw new Error('Expected success')
+    state = s1.data.state
+
+    const s2 = addSubtask({
+      state,
+      input: { content: 'Second subtask here', priority: 2, epicId, taskId, deps: [s1.data.subtask.id] },
+    })
+    expect(s2.success).toBe(true)
+    if (!s2.success) throw new Error('Expected success')
+
+    expect(s2.data.subtask.deps).toEqual([s1.data.subtask.id])
+  })
+
+  it('updates epic deps', () => {
+    let state = createEmptyState()
+    const e1 = addEpic({ state, input: { content: 'First epic here', priority: 2 } })
+    if (!e1.success) throw new Error('Expected success')
+    state = e1.data.state
+
+    const e2 = addEpic({ state, input: { content: 'Second epic here', priority: 2 } })
+    if (!e2.success) throw new Error('Expected success')
+    state = e2.data.state
+
+    const updateResult = updateEpic({ state, epicId: e2.data.epic.id, input: { deps: [e1.data.epic.id] } })
+    expect(updateResult.success).toBe(true)
+    if (!updateResult.success) throw new Error('Expected success')
+
+    expect(updateResult.data.epics[1]?.deps).toEqual([e1.data.epic.id])
+  })
+})
+
 describe('removeItem', () => {
   it('removes an epic', () => {
     const state = createEmptyState()

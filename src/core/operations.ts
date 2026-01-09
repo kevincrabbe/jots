@@ -88,6 +88,7 @@ export function addEpic(args: AddEpicArgs): OperationResult<AddEpicResult> {
     status: 'pending',
     created_at: now,
     notes: input.notes,
+    deps: input.deps,
     tasks: [],
   }
 
@@ -111,6 +112,7 @@ export function addTask(args: AddTaskArgs): OperationResult<AddTaskResult> {
     status: 'pending',
     created_at: now,
     notes: input.notes,
+    deps: input.deps,
     subtasks: [],
   }
 
@@ -135,6 +137,7 @@ export function addSubtask(args: AddSubtaskArgs): OperationResult<AddSubtaskResu
     status: 'pending',
     created_at: now,
     notes: input.notes,
+    deps: input.deps,
   }
 
   const updatedTask = { ...lookup.task, subtasks: [...lookup.task.subtasks, subtask], updated_at: now }
@@ -158,6 +161,7 @@ function applyUpdate<T extends { updated_at?: string | undefined; completed_at?:
     ...(input.priority !== undefined && { priority: input.priority }),
     ...(input.status !== undefined && { status: input.status }),
     ...(input.notes !== undefined && { notes: input.notes }),
+    ...(input.deps !== undefined && { deps: input.deps }),
     updated_at: now,
     ...(input.status === 'completed' && { completed_at: now }),
   }

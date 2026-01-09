@@ -1,10 +1,16 @@
 import { defineCommand } from 'citty'
 import { readState, writeState } from '../storage/file.js'
 import { updateEpic, updateTask, updateSubtask } from '../core/operations.js'
-import { fuzzyFind } from '../core/queries.js'
+import { fuzzyFind, flattenState } from '../core/queries.js'
 import type { State, Priority, Status, UpdateItemInput, FlatItem, OperationResult } from '../core/schema.js'
 
-type UpdateArgs = { content?: string; priority?: string; status?: string }
+type UpdateArgs = {
+  content?: string
+  priority?: string
+  status?: string
+  'add-dep'?: string
+  'remove-dep'?: string
+}
 
 function parsePriority(p: string): Priority {
   const match = p.match(/^p?([1-5])$/i)
@@ -56,11 +62,51 @@ function handleFindError(result: FindResult & { found: false }, identifier: stri
   else outputError(`No item found matching: ${identifier}`, json)
 }
 
-function buildInput(args: UpdateArgs): UpdateItemInput | null {
+function getScopedItems(state: State, item: FlatItem): FlatItem[] {
+  const allItems = flattenState(state)
+  if (item.type === 'epic') return allItems.filter((i) => i.type === 'epic' && i.id !== item.id)
+  if (item.type === 'task') return allItems.filter((i) => i.type === 'task' && i.epicId === item.epicId && i.id !== item.id)
+  return allItems.filter((i) => i.type === 'subtask' && i.taskId === item.taskId && i.id !== item.id)
+}
+
+function resolveDepId(scopedItems: FlatItem[], query: string): string | null {
+  const exact = scopedItems.find((i) => i.id === query)
+  if (exact) return exact.id
+  const qLower = query.toLowerCase()
+  return scopedItems.find((i) => i.content.toLowerCase().includes(qLower))?.id ?? null
+}
+
+function addDepToArray(deps: string[], scopedItems: FlatItem[], addDep: string): string[] {
+  const depId = resolveDepId(scopedItems, addDep)
+  if (depId && !deps.includes(depId)) return [...deps, depId]
+  return deps
+}
+
+function removeDepFromArray(deps: string[], scopedItems: FlatItem[], removeDep: string): string[] {
+  const depId = resolveDepId(scopedItems, removeDep) ?? removeDep
+  return deps.filter((d) => d !== depId)
+}
+
+function buildDepsArray(item: FlatItem, scopedItems: FlatItem[], addDep?: string, removeDep?: string): string[] | undefined {
+  const hasAddDep = addDep !== undefined && addDep !== ''
+  const hasRemoveDep = removeDep !== undefined && removeDep !== ''
+  if (!hasAddDep && !hasRemoveDep) return undefined
+
+  let deps = [...(item.deps ?? [])]
+  if (hasAddDep) deps = addDepToArray(deps, scopedItems, addDep!)
+  if (hasRemoveDep) deps = removeDepFromArray(deps, scopedItems, removeDep!)
+  return deps
+}
+
+function buildInput(args: UpdateArgs, item: FlatItem, scopedItems: FlatItem[]): UpdateItemInput | null {
   const input: UpdateItemInput = {}
   if (args.content) input.content = args.content
   if (args.priority) input.priority = parsePriority(args.priority)
   if (args.status) input.status = args.status as Status
+
+  const deps = buildDepsArray(item, scopedItems, args['add-dep'], args['remove-dep'])
+  if (deps !== undefined) input.deps = deps
+
   return Object.keys(input).length > 0 ? input : null
 }
 
@@ -81,6 +127,8 @@ export default defineCommand({
     content: { type: 'string', alias: 'c', description: 'New content' },
     priority: { type: 'string', alias: 'p', description: 'New priority: p1-p5' },
     status: { type: 'string', alias: 's', description: 'New status: pending, in_progress, completed, blocked' },
+    'add-dep': { type: 'string', description: 'Add a dependency (ID or text to match within scope)' },
+    'remove-dep': { type: 'string', description: 'Remove a dependency (ID or text to match)' },
     json: { type: 'boolean', description: 'Output as JSON', default: false },
   },
   async run({ args }) {
@@ -96,9 +144,10 @@ export default defineCommand({
       process.exit(1)
     }
 
-    const input = buildInput(args as unknown as UpdateArgs)
+    const scopedItems = getScopedItems(result.state, findResult.item)
+    const input = buildInput(args as unknown as UpdateArgs, findResult.item, scopedItems)
     if (!input) {
-      outputError('No changes specified. Use --content, --priority, or --status', args.json as boolean)
+      outputError('No changes specified. Use --content, --priority, --status, --add-dep, or --remove-dep', args.json as boolean)
       process.exit(1)
     }
 

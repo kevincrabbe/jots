@@ -20,6 +20,7 @@ export const SubtaskSchema = z.object({
   updated_at: z.string().datetime().optional(),
   completed_at: z.string().datetime().optional(),
   notes: z.array(z.string()).optional(),
+  deps: z.array(z.string()).optional(),
 })
 
 export type Subtask = z.infer<typeof SubtaskSchema>
@@ -35,6 +36,7 @@ export const TaskSchema = z.object({
   updated_at: z.string().datetime().optional(),
   completed_at: z.string().datetime().optional(),
   notes: z.array(z.string()).optional(),
+  deps: z.array(z.string()).optional(),
   subtasks: z.array(SubtaskSchema).default([]),
 })
 
@@ -51,6 +53,7 @@ export const EpicSchema = z.object({
   updated_at: z.string().datetime().optional(),
   completed_at: z.string().datetime().optional(),
   notes: z.array(z.string()).optional(),
+  deps: z.array(z.string()).optional(),
   tasks: z.array(TaskSchema).default([]),
 })
 
@@ -64,17 +67,20 @@ export const StateSchema = z.object({
 export type State = z.infer<typeof StateSchema>
 
 // Input types for creating new items (without auto-generated fields)
+// Using `| undefined` for exactOptionalPropertyTypes compatibility
 export type CreateEpicInput = {
   content: string
   priority: Priority
-  notes?: string[]
+  notes?: string[] | undefined
+  deps?: string[] | undefined
 }
 
 export type CreateTaskInput = {
   content: string
   priority: Priority
   epicId: string
-  notes?: string[]
+  notes?: string[] | undefined
+  deps?: string[] | undefined
 }
 
 export type CreateSubtaskInput = {
@@ -82,7 +88,8 @@ export type CreateSubtaskInput = {
   priority: Priority
   epicId: string
   taskId: string
-  notes?: string[]
+  notes?: string[] | undefined
+  deps?: string[] | undefined
 }
 
 // Update types (partial, for modifications)
@@ -91,6 +98,7 @@ export type UpdateItemInput = {
   priority?: Priority
   status?: Status
   notes?: string[]
+  deps?: string[]
 }
 
 // Result types for operations
@@ -120,6 +128,7 @@ export type FlatItem = {
   updated_at?: string | undefined
   completed_at?: string | undefined
   notes?: string[] | undefined
+  deps?: string[] | undefined
   epicId?: string | undefined
   epicContent?: string | undefined
   taskId?: string | undefined

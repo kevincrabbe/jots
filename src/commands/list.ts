@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty'
 import { readState } from '../storage/file.js'
-import { filterItems, listEpics, listTasks, listSubtasks } from '../core/queries.js'
+import { filterItems, listEpics, listTasks, listSubtasks, flattenState } from '../core/queries.js'
 import type { FlatItem, Status, Priority, State } from '../core/schema.js'
 
 const STATUS_ICONS: Record<Status, string> = { pending: '○', in_progress: '◐', completed: '●', blocked: '◌' }
@@ -14,7 +14,14 @@ function outputError(error: string, json: boolean): void {
   else console.error(`Error: ${error}`)
 }
 
-function printItem(item: FlatItem): void {
+function buildDepNames(deps: string[], allItems: FlatItem[]): string {
+  return deps.map((depId) => {
+    const dep = allItems.find((i) => i.id === depId)
+    return dep ? `${dep.content.slice(0, 20)}...` : depId
+  }).join(', ')
+}
+
+function printItem(item: FlatItem, showDeps: boolean, allItems: FlatItem[]): void {
   const indent = '  '.repeat(item.depth)
   const icon = STATUS_ICONS[item.status]
   const priorityLabel = `${PRIORITY_COLORS[item.priority]}P${item.priority}${RESET}`
@@ -22,6 +29,12 @@ function printItem(item: FlatItem): void {
   if (item.hasChildren) line += ` ${DIM}(${item.completedChildrenCount}/${item.childrenCount})${RESET}`
   // eslint-disable-next-line no-console
   console.log(line)
+
+  if (showDeps && item.deps && item.deps.length > 0) {
+    const depNames = buildDepNames(item.deps, allItems)
+    // eslint-disable-next-line no-console
+    console.log(`${indent}  ${DIM}↳ deps: ${depNames}${RESET}`)
+  }
 }
 
 function getItemsByType(state: State, type: string, epic?: string, task?: string): FlatItem[] | null {
@@ -53,6 +66,7 @@ export default defineCommand({
     task: { type: 'string', alias: 't', description: 'Filter by task ID or name' },
     status: { type: 'string', alias: 's', description: 'Filter by status' },
     priority: { type: 'string', alias: 'p', description: 'Filter by priority' },
+    deps: { type: 'boolean', alias: 'd', description: 'Show dependencies', default: false },
     json: { type: 'boolean', description: 'Output as JSON', default: false },
   },
   async run({ args }) {
@@ -69,6 +83,7 @@ export default defineCommand({
     }
 
     const filtered = applyFilters(items, args.status as string, args.priority as string)
+    const allItems = flattenState(result.state)
 
     if (args.json) {
       // eslint-disable-next-line no-console
@@ -79,7 +94,7 @@ export default defineCommand({
         console.log('No items found.')
         return
       }
-      for (const item of filtered) printItem(item)
+      for (const item of filtered) printItem(item, args.deps as boolean, allItems)
       // eslint-disable-next-line no-console
       console.log(`${DIM}(${filtered.length} items)${RESET}`)
     }

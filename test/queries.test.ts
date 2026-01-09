@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createEmptyState, addEpic, addTask, addSubtask, markComplete } from '../src/core/operations.js'
+import { createEmptyState, addEpic, addTask, addSubtask, markComplete, updateEpic } from '../src/core/operations.js'
 import {
   flattenState,
   getNext,
@@ -90,6 +90,68 @@ describe('getNext', () => {
 
     expect(epicResult.item?.type).toBe('epic')
     expect(taskResult.item?.type).toBe('task')
+  })
+
+  it('skips items with incomplete deps', () => {
+    let state = createEmptyState()
+
+    const e1 = addEpic({ state, input: { content: 'First epic content', priority: 1 } })
+    if (!e1.success) throw new Error('Setup failed')
+    state = e1.data.state
+
+    const e2 = addEpic({ state, input: { content: 'Second epic content', priority: 1, deps: [e1.data.epic.id] } })
+    if (!e2.success) throw new Error('Setup failed')
+    state = e2.data.state
+
+    // e2 depends on e1, so getNext should return e1 first
+    const result = getNext({ state, level: 'epic' })
+    expect(result.item?.id).toBe(e1.data.epic.id)
+    expect(result.blockedByDeps).toBe(1)
+  })
+
+  it('returns item with deps when deps are completed', () => {
+    let state = createEmptyState()
+
+    const e1 = addEpic({ state, input: { content: 'First epic content', priority: 2 } })
+    if (!e1.success) throw new Error('Setup failed')
+    state = e1.data.state
+
+    const e2 = addEpic({ state, input: { content: 'Second epic content', priority: 1, deps: [e1.data.epic.id] } })
+    if (!e2.success) throw new Error('Setup failed')
+    state = e2.data.state
+
+    // Mark e1 as completed
+    const completeResult = markComplete({ state, id: e1.data.epic.id })
+    if (!completeResult.success) throw new Error('Setup failed')
+    state = completeResult.data
+
+    // Now e2 should be returned (higher priority after e1 is done)
+    const result = getNext({ state, level: 'epic' })
+    expect(result.item?.id).toBe(e2.data.epic.id)
+    expect(result.blockedByDeps).toBe(0)
+  })
+
+  it('reports blockedByDeps count correctly', () => {
+    let state = createEmptyState()
+
+    const e1 = addEpic({ state, input: { content: 'First epic content', priority: 2 } })
+    if (!e1.success) throw new Error('Setup failed')
+    state = e1.data.state
+
+    // Add 3 epics that depend on e1
+    for (let i = 0; i < 3; i++) {
+      const e = addEpic({
+        state,
+        input: { content: `Dependent epic ${i}`, priority: 1, deps: [e1.data.epic.id] },
+      })
+      if (!e.success) throw new Error('Setup failed')
+      state = e.data.state
+    }
+
+    const result = getNext({ state, level: 'epic' })
+    expect(result.item?.id).toBe(e1.data.epic.id)
+    expect(result.blockedByDeps).toBe(3)
+    expect(result.queueDepth).toBe(1)
   })
 })
 

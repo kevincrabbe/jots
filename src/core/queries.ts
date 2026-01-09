@@ -18,6 +18,7 @@ function flattenEpic(epic: Epic): FlatItem {
     updated_at: epic.updated_at,
     completed_at: epic.completed_at,
     notes: epic.notes,
+    deps: epic.deps,
     depth: 0,
     hasChildren: epicTasksCount > 0,
     childrenCount: epicTasksCount,
@@ -39,6 +40,7 @@ function flattenTask(epic: Epic, task: Task): FlatItem {
     updated_at: task.updated_at,
     completed_at: task.completed_at,
     notes: task.notes,
+    deps: task.deps,
     epicId: epic.id,
     epicContent: epic.content,
     depth: 1,
@@ -59,6 +61,7 @@ function flattenSubtask(epic: Epic, task: Task, subtask: Task['subtasks'][0]): F
     updated_at: subtask.updated_at,
     completed_at: subtask.completed_at,
     notes: subtask.notes,
+    deps: subtask.deps,
     epicId: epic.id,
     epicContent: epic.content,
     taskId: task.id,
@@ -91,7 +94,15 @@ export function flattenState(state: State): FlatItem[] {
 // ============================================================================
 
 export type GetNextArgs = { state: State; level?: 'epic' | 'task' | 'subtask' | 'any' }
-export type GetNextResult = { item: FlatItem | null; queueDepth: number }
+export type GetNextResult = { item: FlatItem | null; queueDepth: number; blockedByDeps: number }
+
+function areDepsComplete(item: FlatItem, allItems: FlatItem[]): boolean {
+  if (!item.deps || item.deps.length === 0) return true
+  return item.deps.every((depId) => {
+    const dep = allItems.find((i) => i.id === depId)
+    return dep?.status === 'completed'
+  })
+}
 
 export function getNext(args: GetNextArgs): GetNextResult {
   const { state, level = 'any' } = args
@@ -100,12 +111,15 @@ export function getNext(args: GetNextArgs): GetNextResult {
   const actionable = flat.filter((item) => item.status === 'pending' || item.status === 'in_progress')
   const filtered = level === 'any' ? actionable : actionable.filter((item) => item.type === level)
 
-  const sorted = filtered.sort((a, b) => {
+  const ready = filtered.filter((item) => areDepsComplete(item, flat))
+  const blockedByDeps = filtered.length - ready.length
+
+  const sorted = ready.sort((a, b) => {
     if (a.priority !== b.priority) return a.priority - b.priority
     return level === 'any' ? b.depth - a.depth : 0
   })
 
-  return { item: sorted[0] ?? null, queueDepth: filtered.length }
+  return { item: sorted[0] ?? null, queueDepth: ready.length, blockedByDeps }
 }
 
 // ============================================================================
