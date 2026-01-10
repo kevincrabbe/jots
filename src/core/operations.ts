@@ -3,6 +3,7 @@ import type {
   Epic,
   Task,
   Subtask,
+  Priority,
   CreateEpicInput,
   CreateTaskInput,
   CreateSubtaskInput,
@@ -46,6 +47,25 @@ function findSubtask(
   const subtaskIndex = taskLookup.task.subtasks.findIndex((s) => s.id === subtaskId)
   const subtask = taskLookup.task.subtasks[subtaskIndex]
   return subtask ? { ...taskLookup, subtask, subtaskIndex } : null
+}
+
+// ============================================================================
+// Helper: Find standalone (top-level) tasks
+// ============================================================================
+
+type StandaloneTaskLookup = { task: Task; index: number }
+
+function findStandaloneTask(state: State, taskId: string): StandaloneTaskLookup | null {
+  const tasks = state.tasks ?? []
+  const index = tasks.findIndex((t) => t.id === taskId)
+  const task = tasks[index]
+  return task ? { task, index } : null
+}
+
+function updateStandaloneTaskInState(state: State, index: number, task: Task): State {
+  const newTasks = [...(state.tasks ?? [])]
+  newTasks[index] = task
+  return { ...state, tasks: newTasks }
 }
 
 // ============================================================================
@@ -101,8 +121,6 @@ export type AddTaskResult = { state: State; task: Task }
 
 export function addTask(args: AddTaskArgs): OperationResult<AddTaskResult> {
   const { state, input } = args
-  const lookup = findEpic(state, input.epicId)
-  if (!lookup) return { success: false, error: `Epic not found: ${input.epicId}` }
 
   const now = timestamp()
   const task: Task = {
@@ -115,6 +133,17 @@ export function addTask(args: AddTaskArgs): OperationResult<AddTaskResult> {
     deps: input.deps,
     subtasks: [],
   }
+
+  // If no epicId, add as standalone task
+  if (!input.epicId) {
+    const newTasks = [...(state.tasks ?? []), task]
+    const newState: State = { ...state, tasks: newTasks }
+    return { success: true, data: { state: newState, task } }
+  }
+
+  // Otherwise, add to epic
+  const lookup = findEpic(state, input.epicId)
+  if (!lookup) return { success: false, error: `Epic not found: ${input.epicId}` }
 
   const updatedEpic: Epic = { ...lookup.epic, tasks: [...lookup.epic.tasks, task], updated_at: now }
   const newState = updateEpicInState(state, lookup.index, updatedEpic)
@@ -146,11 +175,42 @@ export function addSubtask(args: AddSubtaskArgs): OperationResult<AddSubtaskResu
   return { success: true, data: { state: newState, subtask } }
 }
 
+export type AddStandaloneSubtaskInput = {
+  content: string
+  priority: Priority
+  taskId: string
+  notes?: string[] | undefined
+  deps?: string[] | undefined
+}
+
+export type AddStandaloneSubtaskArgs = { state: State; input: AddStandaloneSubtaskInput }
+
+export function addStandaloneSubtask(args: AddStandaloneSubtaskArgs): OperationResult<AddSubtaskResult> {
+  const { state, input } = args
+  const lookup = findStandaloneTask(state, input.taskId)
+  if (!lookup) return { success: false, error: `Standalone task not found: ${input.taskId}` }
+
+  const now = timestamp()
+  const subtask: Subtask = {
+    id: generateId(),
+    content: input.content,
+    priority: input.priority,
+    status: 'pending',
+    created_at: now,
+    notes: input.notes,
+    deps: input.deps,
+  }
+
+  const updatedTask: Task = { ...lookup.task, subtasks: [...lookup.task.subtasks, subtask], updated_at: now }
+  const newState = updateStandaloneTaskInState(state, lookup.index, updatedTask)
+  return { success: true, data: { state: newState, subtask } }
+}
+
 // ============================================================================
 // Update Operations
 // ============================================================================
 
-function applyUpdate<T extends { updated_at?: string | undefined; completed_at?: string | undefined }>(
+function applyUpdate<T extends { updated_at?: string | undefined; completed_at?: string | undefined; implementation_description?: string | undefined }>(
   item: T,
   input: UpdateItemInput,
   now: string
@@ -160,6 +220,7 @@ function applyUpdate<T extends { updated_at?: string | undefined; completed_at?:
     ...(input.content !== undefined && { content: input.content }),
     ...(input.priority !== undefined && { priority: input.priority }),
     ...(input.status !== undefined && { status: input.status }),
+    ...(input.implementation_description !== undefined && { implementation_description: input.implementation_description }),
     ...(input.notes !== undefined && { notes: input.notes }),
     ...(input.deps !== undefined && { deps: input.deps }),
     updated_at: now,
@@ -208,6 +269,33 @@ export function updateSubtask(args: UpdateSubtaskArgs): OperationResult<State> {
   return { success: true, data: updateEpicInState(args.state, lookup.epicIndex, updatedEpic) }
 }
 
+export type UpdateStandaloneTaskArgs = { state: State; taskId: string; input: UpdateItemInput }
+
+export function updateStandaloneTask(args: UpdateStandaloneTaskArgs): OperationResult<State> {
+  const lookup = findStandaloneTask(args.state, args.taskId)
+  if (!lookup) return { success: false, error: `Standalone task not found: ${args.taskId}` }
+
+  const updatedTask = applyUpdate(lookup.task, args.input, timestamp())
+  return { success: true, data: updateStandaloneTaskInState(args.state, lookup.index, updatedTask) }
+}
+
+export type UpdateStandaloneSubtaskArgs = { state: State; taskId: string; subtaskId: string; input: UpdateItemInput }
+
+export function updateStandaloneSubtask(args: UpdateStandaloneSubtaskArgs): OperationResult<State> {
+  const lookup = findStandaloneTask(args.state, args.taskId)
+  if (!lookup) return { success: false, error: `Standalone task not found: ${args.taskId}` }
+
+  const subtaskIndex = lookup.task.subtasks.findIndex((s) => s.id === args.subtaskId)
+  if (subtaskIndex === -1) return { success: false, error: `Subtask not found: ${args.subtaskId}` }
+
+  const now = timestamp()
+  const updatedSubtask = applyUpdate(lookup.task.subtasks[subtaskIndex]!, args.input, now)
+  const updatedSubtasks = [...lookup.task.subtasks]
+  updatedSubtasks[subtaskIndex] = updatedSubtask
+  const updatedTask: Task = { ...lookup.task, subtasks: updatedSubtasks, updated_at: now }
+  return { success: true, data: updateStandaloneTaskInState(args.state, lookup.index, updatedTask) }
+}
+
 // ============================================================================
 // Mark Complete
 // ============================================================================
@@ -217,11 +305,22 @@ export type MarkCompleteArgs = { state: State; id: string }
 export function markComplete(args: MarkCompleteArgs): OperationResult<State> {
   const { state, id } = args
 
+  // Check epics and their tasks/subtasks
   for (const epic of state.epics) {
     if (epic.id === id) return markEpicComplete(state, id)
 
     const taskResult = findAndCompleteTask(state, epic, id)
     if (taskResult) return taskResult
+  }
+
+  // Check standalone tasks
+  const standaloneTasks = state.tasks ?? []
+  for (const task of standaloneTasks) {
+    if (task.id === id) return completeStandaloneTask(state, id)
+
+    // Check subtasks of standalone tasks
+    const subtaskResult = findAndCompleteStandaloneSubtask(state, task, id)
+    if (subtaskResult) return subtaskResult
   }
 
   return { success: false, error: `Item not found: ${id}` }
@@ -292,6 +391,52 @@ function maybeCompleteTaskAndEpic(state: State, epicId: string, taskId: string):
   return maybeCompleteEpic(result.data, epicId)
 }
 
+function completeStandaloneTask(state: State, taskId: string): OperationResult<State> {
+  return updateStandaloneTask({ state, taskId, input: { status: 'completed' } })
+}
+
+function findAndCompleteStandaloneSubtask(
+  state: State,
+  task: Task,
+  id: string
+): OperationResult<State> | null {
+  const subtask = task.subtasks.find((s) => s.id === id)
+  if (!subtask) return null
+  return completeStandaloneSubtaskAndCascade(state, task.id, id)
+}
+
+function completeStandaloneSubtaskAndCascade(
+  state: State,
+  taskId: string,
+  subtaskId: string
+): OperationResult<State> {
+  const lookup = findStandaloneTask(state, taskId)
+  if (!lookup) return { success: false, error: `Standalone task not found: ${taskId}` }
+
+  const subtaskIndex = lookup.task.subtasks.findIndex((s) => s.id === subtaskId)
+  if (subtaskIndex === -1) return { success: false, error: `Subtask not found: ${subtaskId}` }
+
+  const now = timestamp()
+  const updatedSubtask = applyUpdate(lookup.task.subtasks[subtaskIndex]!, { status: 'completed' }, now)
+  const updatedSubtasks = [...lookup.task.subtasks]
+  updatedSubtasks[subtaskIndex] = updatedSubtask
+  const updatedTask: Task = { ...lookup.task, subtasks: updatedSubtasks, updated_at: now }
+  const newState = updateStandaloneTaskInState(state, lookup.index, updatedTask)
+
+  return maybeCompleteStandaloneTask(newState, taskId)
+}
+
+function maybeCompleteStandaloneTask(state: State, taskId: string): OperationResult<State> {
+  const tasks = state.tasks ?? []
+  const task = tasks.find((t) => t.id === taskId)
+  if (!task || task.subtasks.length === 0) return { success: true, data: state }
+
+  const allComplete = task.subtasks.every((s) => s.status === 'completed')
+  if (!allComplete || task.status === 'completed') return { success: true, data: state }
+
+  return updateStandaloneTask({ state, taskId, input: { status: 'completed' } })
+}
+
 // ============================================================================
 // Remove Operations
 // ============================================================================
@@ -301,12 +446,23 @@ export type RemoveItemArgs = { state: State; id: string }
 export function removeItem(args: RemoveItemArgs): OperationResult<State> {
   const { state, id } = args
 
+  // Check epics and their tasks/subtasks
   for (let i = 0; i < state.epics.length; i++) {
     const epic = state.epics[i]!
     if (epic.id === id) return removeEpic(state, i)
 
     const taskResult = findAndRemoveTask(state, epic, i, id)
     if (taskResult) return taskResult
+  }
+
+  // Check standalone tasks
+  const standaloneTasks = state.tasks ?? []
+  for (let i = 0; i < standaloneTasks.length; i++) {
+    const task = standaloneTasks[i]!
+    if (task.id === id) return removeStandaloneTask(state, i)
+
+    const subtaskResult = findAndRemoveStandaloneSubtask(state, i, task, id)
+    if (subtaskResult) return subtaskResult
   }
 
   return { success: false, error: `Item not found: ${id}` }
@@ -370,10 +526,40 @@ function removeSubtask(
   return { success: true, data: updateEpicInState(state, epicIndex, updatedEpic) }
 }
 
+function removeStandaloneTask(state: State, taskIndex: number): OperationResult<State> {
+  const newTasks = [...(state.tasks ?? [])]
+  newTasks.splice(taskIndex, 1)
+  return { success: true, data: { ...state, tasks: newTasks } }
+}
+
+function findAndRemoveStandaloneSubtask(
+  state: State,
+  taskIndex: number,
+  task: Task,
+  id: string
+): OperationResult<State> | null {
+  const subtaskIndex = task.subtasks.findIndex((s) => s.id === id)
+  if (subtaskIndex === -1) return null
+  return removeStandaloneSubtask(state, taskIndex, task, subtaskIndex)
+}
+
+function removeStandaloneSubtask(
+  state: State,
+  taskIndex: number,
+  task: Task,
+  subtaskIndex: number
+): OperationResult<State> {
+  const now = timestamp()
+  const newSubtasks = [...task.subtasks]
+  newSubtasks.splice(subtaskIndex, 1)
+  const updatedTask: Task = { ...task, subtasks: newSubtasks, updated_at: now }
+  return { success: true, data: updateStandaloneTaskInState(state, taskIndex, updatedTask) }
+}
+
 // ============================================================================
 // Create empty state
 // ============================================================================
 
 export function createEmptyState(): State {
-  return { version: 1, epics: [] }
+  return { version: 1, epics: [], tasks: [] }
 }

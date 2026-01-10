@@ -1,8 +1,8 @@
 import { defineCommand } from 'citty'
 import { readState, writeState } from '../storage/file.js'
-import { markComplete } from '../core/operations.js'
+import { markComplete, updateEpic, updateTask, updateSubtask, updateStandaloneTask, updateStandaloneSubtask } from '../core/operations.js'
 import { fuzzyFind } from '../core/queries.js'
-import type { State, FlatItem } from '../core/schema.js'
+import type { State, FlatItem, OperationResult, UpdateItemInput } from '../core/schema.js'
 
 function outputError(error: string, json: boolean): void {
   // eslint-disable-next-line no-console
@@ -51,10 +51,28 @@ function findItem(state: State, identifier: string): FindResult {
   return { found: true, item: matches[0] }
 }
 
+function completeWithImpl(state: State, item: FlatItem, impl: string): OperationResult<State> {
+  const input: UpdateItemInput = { status: 'completed', implementation_description: impl }
+
+  if (item.type === 'epic') return updateEpic({ state, epicId: item.id, input })
+  if (item.type === 'task') {
+    if (item.isStandalone) return updateStandaloneTask({ state, taskId: item.id, input })
+    if (!item.epicId) return { success: false, error: 'Task has no epic reference' }
+    return updateTask({ state, epicId: item.epicId, taskId: item.id, input })
+  }
+  if (!item.taskId) return { success: false, error: 'Subtask has no task reference' }
+  if (item.isStandalone) {
+    return updateStandaloneSubtask({ state, taskId: item.taskId, subtaskId: item.id, input })
+  }
+  if (!item.epicId) return { success: false, error: 'Subtask has no epic reference' }
+  return updateSubtask({ state, epicId: item.epicId, taskId: item.taskId, subtaskId: item.id, input })
+}
+
 export default defineCommand({
   meta: { name: 'done', description: 'Mark an item as completed' },
   args: {
     identifier: { type: 'positional', description: 'ID or text to match', required: true },
+    impl: { type: 'string', alias: 'i', description: 'Implementation description (what was done)' },
     json: { type: 'boolean', description: 'Output as JSON', default: false },
   },
   async run({ args }) {
@@ -82,7 +100,11 @@ export default defineCommand({
       return
     }
 
-    const opResult = markComplete({ state, id: item.id })
+    const impl = args.impl as string | undefined
+    const opResult = impl
+      ? completeWithImpl(state, item, impl)
+      : markComplete({ state, id: item.id })
+
     if (!opResult.success) {
       outputError(opResult.error, args.json as boolean)
       process.exit(1)

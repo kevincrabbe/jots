@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty'
 import { readState, writeState } from '../storage/file.js'
-import { updateEpic, updateTask, updateSubtask } from '../core/operations.js'
+import { updateEpic, updateTask, updateSubtask, updateStandaloneTask, updateStandaloneSubtask } from '../core/operations.js'
 import { fuzzyFind, flattenState } from '../core/queries.js'
 import type { State, Priority, Status, UpdateItemInput, FlatItem, OperationResult } from '../core/schema.js'
 
@@ -8,6 +8,7 @@ type UpdateArgs = {
   content?: string
   priority?: string
   status?: string
+  impl?: string
   'add-dep'?: string
   'remove-dep'?: string
 }
@@ -103,6 +104,7 @@ function buildInput(args: UpdateArgs, item: FlatItem, scopedItems: FlatItem[]): 
   if (args.content) input.content = args.content
   if (args.priority) input.priority = parsePriority(args.priority)
   if (args.status) input.status = args.status as Status
+  if (args.impl) input.implementation_description = args.impl
 
   const deps = buildDepsArray(item, scopedItems, args['add-dep'], args['remove-dep'])
   if (deps !== undefined) input.deps = deps
@@ -113,10 +115,15 @@ function buildInput(args: UpdateArgs, item: FlatItem, scopedItems: FlatItem[]): 
 function applyUpdate(state: State, item: FlatItem, input: UpdateItemInput): OperationResult<State> {
   if (item.type === 'epic') return updateEpic({ state, epicId: item.id, input })
   if (item.type === 'task') {
+    if (item.isStandalone) return updateStandaloneTask({ state, taskId: item.id, input })
     if (!item.epicId) return { success: false, error: 'Task has no epic reference' }
     return updateTask({ state, epicId: item.epicId, taskId: item.id, input })
   }
-  if (!item.epicId || !item.taskId) return { success: false, error: 'Subtask has no epic/task reference' }
+  if (!item.taskId) return { success: false, error: 'Subtask has no task reference' }
+  if (item.isStandalone) {
+    return updateStandaloneSubtask({ state, taskId: item.taskId, subtaskId: item.id, input })
+  }
+  if (!item.epicId) return { success: false, error: 'Subtask has no epic reference' }
   return updateSubtask({ state, epicId: item.epicId, taskId: item.taskId, subtaskId: item.id, input })
 }
 
@@ -127,6 +134,7 @@ export default defineCommand({
     content: { type: 'string', alias: 'c', description: 'New content' },
     priority: { type: 'string', alias: 'p', description: 'New priority: p1-p5' },
     status: { type: 'string', alias: 's', description: 'New status: pending, in_progress, completed, blocked' },
+    impl: { type: 'string', alias: 'i', description: 'Implementation description (what was done)' },
     'add-dep': { type: 'string', description: 'Add a dependency (ID or text to match within scope)' },
     'remove-dep': { type: 'string', description: 'Remove a dependency (ID or text to match)' },
     json: { type: 'boolean', description: 'Output as JSON', default: false },
@@ -147,7 +155,7 @@ export default defineCommand({
     const scopedItems = getScopedItems(result.state, findResult.item)
     const input = buildInput(args as unknown as UpdateArgs, findResult.item, scopedItems)
     if (!input) {
-      outputError('No changes specified. Use --content, --priority, --status, --add-dep, or --remove-dep', args.json as boolean)
+      outputError('No changes specified. Use --content, --priority, --status, --impl, --add-dep, or --remove-dep', args.json as boolean)
       process.exit(1)
     }
 

@@ -19,6 +19,7 @@ export const SubtaskSchema = z.object({
   created_at: z.string().datetime(),
   updated_at: z.string().datetime().optional(),
   completed_at: z.string().datetime().optional(),
+  implementation_description: z.string().optional(),
   notes: z.array(z.string()).optional(),
   deps: z.array(z.string()).optional(),
 })
@@ -35,6 +36,7 @@ export const TaskSchema = z.object({
   created_at: z.string().datetime(),
   updated_at: z.string().datetime().optional(),
   completed_at: z.string().datetime().optional(),
+  implementation_description: z.string().optional(),
   notes: z.array(z.string()).optional(),
   deps: z.array(z.string()).optional(),
   subtasks: z.array(SubtaskSchema).default([]),
@@ -52,6 +54,7 @@ export const EpicSchema = z.object({
   created_at: z.string().datetime(),
   updated_at: z.string().datetime().optional(),
   completed_at: z.string().datetime().optional(),
+  implementation_description: z.string().optional(),
   notes: z.array(z.string()).optional(),
   deps: z.array(z.string()).optional(),
   tasks: z.array(TaskSchema).default([]),
@@ -62,6 +65,7 @@ export type Epic = z.infer<typeof EpicSchema>
 export const StateSchema = z.object({
   version: z.literal(1),
   epics: z.array(EpicSchema).default([]),
+  tasks: z.array(TaskSchema).default([]),
 })
 
 export type State = z.infer<typeof StateSchema>
@@ -78,7 +82,7 @@ export type CreateEpicInput = {
 export type CreateTaskInput = {
   content: string
   priority: Priority
-  epicId: string
+  epicId?: string | undefined
   notes?: string[] | undefined
   deps?: string[] | undefined
 }
@@ -97,6 +101,7 @@ export type UpdateItemInput = {
   content?: string
   priority?: Priority
   status?: Status
+  implementation_description?: string
   notes?: string[]
   deps?: string[]
 }
@@ -127,6 +132,7 @@ export type FlatItem = {
   created_at: string
   updated_at?: string | undefined
   completed_at?: string | undefined
+  implementation_description?: string | undefined
   notes?: string[] | undefined
   deps?: string[] | undefined
   epicId?: string | undefined
@@ -137,4 +143,5 @@ export type FlatItem = {
   hasChildren: boolean
   childrenCount: number
   completedChildrenCount: number
+  isStandalone?: boolean | undefined
 }

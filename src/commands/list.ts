@@ -37,6 +37,10 @@ function printItem(item: FlatItem, showDeps: boolean, allItems: FlatItem[]): voi
   }
 }
 
+function getStandaloneTasks(state: State): FlatItem[] {
+  return filterItems({ state }).filter((i) => i.type === 'task' && i.isStandalone)
+}
+
 function getItemsByType(state: State, type: string, epic?: string, task?: string): FlatItem[] | null {
   if (type === 'epics') return listEpics(state)
   if (type === 'tasks') return listTasks(state, epic)
@@ -56,6 +60,38 @@ function applyFilters(items: FlatItem[], statusArg?: string, priorityArg?: strin
     filtered = filtered.filter((i) => priorities.includes(i.priority))
   }
   return filtered
+}
+
+type PrintArgs = {
+  filtered: FlatItem[]
+  filteredStandalone: FlatItem[]
+  showStandaloneSection: boolean
+  showDeps: boolean
+  allItems: FlatItem[]
+}
+
+function printItems(args: PrintArgs): void {
+  const { filtered, filteredStandalone, showStandaloneSection, showDeps, allItems } = args
+  const totalItems = filtered.length + filteredStandalone.length
+
+  if (totalItems === 0) {
+    // eslint-disable-next-line no-console
+    console.log('No items found.')
+    return
+  }
+
+  for (const item of filtered) printItem(item, showDeps, allItems)
+
+  if (showStandaloneSection && filteredStandalone.length > 0) {
+    // eslint-disable-next-line no-console
+    console.log('')
+    // eslint-disable-next-line no-console
+    console.log('Standalone Tasks:')
+    for (const item of filteredStandalone) printItem(item, showDeps, allItems)
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(`${DIM}(${totalItems} items)${RESET}`)
 }
 
 export default defineCommand({
@@ -85,18 +121,19 @@ export default defineCommand({
     const filtered = applyFilters(items, args.status as string, args.priority as string)
     const allItems = flattenState(result.state)
 
+    // Get standalone tasks for separate section when listing epics
+    const showStandaloneSection = args.type === 'epics'
+    const standaloneTasks = showStandaloneSection ? getStandaloneTasks(result.state) : []
+    const filteredStandalone = applyFilters(standaloneTasks, args.status as string, args.priority as string)
+
     if (args.json) {
+      const output = showStandaloneSection
+        ? { items: filtered, standaloneTasks: filteredStandalone, count: filtered.length + filteredStandalone.length }
+        : { items: filtered, count: filtered.length }
       // eslint-disable-next-line no-console
-      console.log(JSON.stringify({ items: filtered, count: filtered.length }))
+      console.log(JSON.stringify(output))
     } else {
-      if (filtered.length === 0) {
-        // eslint-disable-next-line no-console
-        console.log('No items found.')
-        return
-      }
-      for (const item of filtered) printItem(item, args.deps as boolean, allItems)
-      // eslint-disable-next-line no-console
-      console.log(`${DIM}(${filtered.length} items)${RESET}`)
+      printItems({ filtered, filteredStandalone, showStandaloneSection, showDeps: args.deps as boolean, allItems })
     }
   },
 })

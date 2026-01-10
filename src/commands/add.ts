@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty'
 import { readOrCreateState, writeState } from '../storage/file.js'
-import { addEpic, addTask, addSubtask } from '../core/operations.js'
+import { addEpic, addTask, addSubtask, addStandaloneSubtask } from '../core/operations.js'
 import { fuzzyFind } from '../core/queries.js'
 import type { State, Priority } from '../core/schema.js'
 
@@ -58,20 +58,31 @@ function addEpicItem(state: State, content: string, priority: Priority, deps?: s
 }
 
 function addTaskItem(state: State, content: string, priority: Priority, epicQuery?: string, deps?: string[]): ProcessResult {
-  if (!epicQuery) return { success: false, error: '--epic is required for adding a task' }
-  const epicId = resolveId(state, epicQuery, 'epic')
-  if (!epicId) return { success: false, error: `Epic not found: ${epicQuery}` }
+  // If no epicQuery, create a standalone task
+  const epicId = epicQuery ? resolveId(state, epicQuery, 'epic') ?? undefined : undefined
+  if (epicQuery && !epicId) return { success: false, error: `Epic not found: ${epicQuery}` }
   const result = addTask({ state, input: { content, priority, epicId, deps } })
   if (!result.success) return { success: false, error: result.error }
   return { success: true, data: { state: result.data.state, id: result.data.task.id, content: result.data.task.content } }
 }
 
 function addSubtaskItem(state: State, content: string, priority: Priority, epicQuery?: string, taskQuery?: string, deps?: string[]): ProcessResult {
-  if (!epicQuery || !taskQuery) return { success: false, error: '--epic and --task are required for adding a subtask' }
-  const epicId = resolveId(state, epicQuery, 'epic')
-  if (!epicId) return { success: false, error: `Epic not found: ${epicQuery}` }
+  if (!taskQuery) return { success: false, error: '--task is required for adding a subtask' }
+
   const taskId = resolveId(state, taskQuery, 'task')
   if (!taskId) return { success: false, error: `Task not found: ${taskQuery}` }
+
+  // Check if it's a standalone task subtask (no epic) or regular subtask
+  if (!epicQuery) {
+    // Try to add to standalone task
+    const result = addStandaloneSubtask({ state, input: { content, priority, taskId, deps } })
+    if (!result.success) return { success: false, error: result.error }
+    return { success: true, data: { state: result.data.state, id: result.data.subtask.id, content: result.data.subtask.content } }
+  }
+
+  // Regular subtask under epic > task
+  const epicId = resolveId(state, epicQuery, 'epic')
+  if (!epicId) return { success: false, error: `Epic not found: ${epicQuery}` }
   const result = addSubtask({ state, input: { content, priority, epicId, taskId, deps } })
   if (!result.success) return { success: false, error: result.error }
   return { success: true, data: { state: result.data.state, id: result.data.subtask.id, content: result.data.subtask.content } }
@@ -108,8 +119,8 @@ export default defineCommand({
   args: {
     type: { type: 'positional', description: 'Type: epic, task, or subtask', required: true },
     content: { type: 'positional', description: 'Content/description of the item', required: true },
-    epic: { type: 'string', alias: 'e', description: 'Epic ID or name (for task/subtask)' },
-    task: { type: 'string', alias: 't', description: 'Task ID or name (for subtask)' },
+    epic: { type: 'string', alias: 'e', description: 'Epic ID or name (required for subtask, optional for task - omit for standalone task)' },
+    task: { type: 'string', alias: 't', description: 'Task ID or name (required for subtask)' },
     priority: { type: 'string', alias: 'p', description: 'Priority: p1-p5 (default: p2)', default: 'p2' },
     'depends-on': { type: 'string', alias: 'd', description: 'Dependencies (comma-separated IDs or names)' },
     json: { type: 'boolean', description: 'Output as JSON', default: false },

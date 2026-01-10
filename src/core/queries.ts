@@ -17,6 +17,7 @@ function flattenEpic(epic: Epic): FlatItem {
     created_at: epic.created_at,
     updated_at: epic.updated_at,
     completed_at: epic.completed_at,
+    implementation_description: epic.implementation_description,
     notes: epic.notes,
     deps: epic.deps,
     depth: 0,
@@ -26,9 +27,10 @@ function flattenEpic(epic: Epic): FlatItem {
   }
 }
 
-function flattenTask(epic: Epic, task: Task): FlatItem {
+function flattenTask(epic: Epic | null, task: Task): FlatItem {
   const taskSubtasksCount = task.subtasks.length
   const taskCompletedSubtasks = task.subtasks.filter((s) => s.status === 'completed').length
+  const isStandalone = epic === null
 
   return {
     type: 'task',
@@ -39,18 +41,21 @@ function flattenTask(epic: Epic, task: Task): FlatItem {
     created_at: task.created_at,
     updated_at: task.updated_at,
     completed_at: task.completed_at,
+    implementation_description: task.implementation_description,
     notes: task.notes,
     deps: task.deps,
-    epicId: epic.id,
-    epicContent: epic.content,
-    depth: 1,
+    epicId: epic?.id,
+    epicContent: epic?.content,
+    depth: isStandalone ? 0 : 1,
     hasChildren: taskSubtasksCount > 0,
     childrenCount: taskSubtasksCount,
     completedChildrenCount: taskCompletedSubtasks,
+    isStandalone,
   }
 }
 
-function flattenSubtask(epic: Epic, task: Task, subtask: Task['subtasks'][0]): FlatItem {
+function flattenSubtask(epic: Epic | null, task: Task, subtask: Task['subtasks'][0]): FlatItem {
+  const isStandalone = epic === null
   return {
     type: 'subtask',
     id: subtask.id,
@@ -60,22 +65,25 @@ function flattenSubtask(epic: Epic, task: Task, subtask: Task['subtasks'][0]): F
     created_at: subtask.created_at,
     updated_at: subtask.updated_at,
     completed_at: subtask.completed_at,
+    implementation_description: subtask.implementation_description,
     notes: subtask.notes,
     deps: subtask.deps,
-    epicId: epic.id,
-    epicContent: epic.content,
+    epicId: epic?.id,
+    epicContent: epic?.content,
     taskId: task.id,
     taskContent: task.content,
-    depth: 2,
+    depth: isStandalone ? 1 : 2,
     hasChildren: false,
     childrenCount: 0,
     completedChildrenCount: 0,
+    isStandalone,
   }
 }
 
 export function flattenState(state: State): FlatItem[] {
   const items: FlatItem[] = []
 
+  // Flatten epics and their nested tasks/subtasks
   for (const epic of state.epics) {
     items.push(flattenEpic(epic))
     for (const task of epic.tasks) {
@@ -83,6 +91,15 @@ export function flattenState(state: State): FlatItem[] {
       for (const subtask of task.subtasks) {
         items.push(flattenSubtask(epic, task, subtask))
       }
+    }
+  }
+
+  // Flatten standalone tasks and their subtasks
+  const standaloneTasks = state.tasks ?? []
+  for (const task of standaloneTasks) {
+    items.push(flattenTask(null, task))
+    for (const subtask of task.subtasks) {
+      items.push(flattenSubtask(null, task, subtask))
     }
   }
 

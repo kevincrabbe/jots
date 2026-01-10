@@ -30,5 +30,12 @@ export default tseslint.config(
       'no-var': 'error',
     },
   },
+  {
+    // Allow operations.ts to be longer due to cohesive CRUD operations for multiple item types
+    files: ['**/core/operations.ts'],
+    rules: {
+      'max-lines': ['error', { max: 600, skipBlankLines: true, skipComments: true }],
+    },
+  },
   eslintConfigPrettier
 )
